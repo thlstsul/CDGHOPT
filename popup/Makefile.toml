@@ -1,0 +1,16 @@
+[tasks.install]
+script_runner = "@shell"
+script = '''
+pnpm install
+'''
+
+[tasks.fmt]
+install_crate = "leptosfmt"
+command = "cargo"
+args = ["fmt"]
+
+[tasks.build]
+install_crate = "trunk"
+command = "trunk"
+args = ["build", "--release", "--dist", "../extension/popup"]
+dependencies = ["install"]

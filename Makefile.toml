@@ -1,0 +1,128 @@
+[tasks.pack]
+workspace = false
+dependencies = ["build_extension", "restuct", "rebuild"]
+
+[tasks.build_extension]
+workspace = false
+run_task = { name = "build", fork = true }
+
+[tasks.zip]
+
+
+[tasks.restuct]
+script_runner = "@shell"
+script = '''
+rm -rf dist
+mkdir dist
+cp -r extension/* dist/
+mv dist/popup/* dist/
+mv dist/popup/snippets dist/
+rm -rf dist/popup
+'''
+
+[tasks.rebuild]
+cwd = "dist"
+script_runner = "@rust"
+script = '''
+//! ```cargo
+//! [dependencies]
+//! scraper = "0.20.0"
+//! html5ever = "0.27.0"
+//! ```
+use std::{
+    fs::OpenOptions,
+    io::{Read, Write},
+};
+
+use html5ever::{tree_builder::TreeSink, Attribute, LocalName, Namespace, QualName};
+use scraper::{node::Element, Html, Node, Selector};
+
+/// Make Javascript no inline
+fn main() {
+    let mut buffer = String::new();
+    {
+        let mut index_html = OpenOptions::new()
+            .read(true)
+            .open("index.html")
+            .expect("Failed to open index.html");
+        index_html
+            .read_to_string(&mut buffer)
+            .expect("Failed to read index.html");
+    }
+
+    let selector = Selector::parse("script").expect("Failed to create selector");
+    let mut document = Html::parse_document(&buffer);
+
+    {
+        let script_nodes = document.select(&selector).filter(|n| n.has_children());
+        let mut index_js = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open("index.js")
+            .expect("Failed to open index.js");
+
+        let mut buffer = Vec::new();
+        for script in script_nodes {
+            buffer.write(&script.inner_html().as_bytes()).unwrap();
+        }
+
+        index_js
+            .write_all(&buffer)
+            .expect("Failed to write index.js");
+    }
+
+    {
+        let remove_nodes: Vec<_> = document
+            .select(&selector)
+            .filter(|n| n.has_children())
+            .map(|n| n.id())
+            .collect();
+
+        for node_id in remove_nodes {
+            document.remove_from_parent(&node_id);
+        }
+    }
+
+    {
+        let selector = Selector::parse("body").expect("Failed to create selector");
+        if let Some(body) = document.select(&selector).find(|_| true) {
+            if let Some(mut body) = document.tree.get_mut(body.id()) {
+                body.append(Node::Element(Element::new(
+                    QualName {
+                        prefix: None,
+                        ns: Namespace::default(),
+                        local: LocalName::from("script"),
+                    },
+                    vec![
+                        Attribute {
+                            name: QualName {
+                                prefix: None,
+                                ns: Namespace::default(),
+                                local: LocalName::from("type"),
+                            },
+                            value: "module".into(),
+                        },
+                        Attribute {
+                            name: QualName {
+                                prefix: None,
+                                ns: Namespace::default(),
+                                local: LocalName::from("src"),
+                            },
+                            value: "index.js".into(),
+                        },
+                    ],
+                )));
+            }
+        }
+    }
+
+    let mut index_html = OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open("index.html")
+        .expect("Failed to open index.html");
+    index_html
+        .write_all(document.html().as_bytes())
+        .expect("Failed to write index.html");
+}
+'''

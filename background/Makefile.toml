@@ -1,0 +1,14 @@
+[tasks.build]
+install_crate = "wasm-pack"
+command = "wasm-pack"
+args = [
+    "build",
+    "--release",
+    "--no-typescript",
+    "--out-dir",
+    "../extension/background/gen",
+    "--out-name",
+    "background",
+    "--target",
+    "web",
+]
