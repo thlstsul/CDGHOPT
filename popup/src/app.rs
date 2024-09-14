@@ -1,22 +1,16 @@
 use std::str::FromStr;
 
+use crate::body::BodyArea;
 use crate::header::HeaderTable;
 use crate::method::MethodSelect;
 use crate::response::Response;
 use crate::send::SendButton;
-use crate::url::UrlInput;
+use crate::uri::UrlInput;
 use leptos::ev::MouseEvent;
 use leptos::*;
 use module::{self, Message, Request};
 use snafu::Snafu;
-use wasm_bindgen::prelude::wasm_bindgen;
-use wasm_bindgen::JsValue;
-
-#[wasm_bindgen(module = "/src/progress.js")]
-extern "C" {
-    #[wasm_bindgen(catch)]
-    async fn send_message(msg: JsValue) -> Result<JsValue, JsValue>;
-}
+use web_extensions_sys::chrome;
 
 fn serde_error(e: impl std::error::Error) -> Error {
     Error::Serialize { src: e.to_string() }
@@ -27,11 +21,21 @@ async fn http_send(req: Request) -> Result<Response, Error> {
     let param = serde_json::to_string(&req).map_err(serde_error)?;
     let message = Message::new("http_send".to_string(), param);
     let msg = serde_wasm_bindgen::to_value(&message).map_err(serde_error)?;
-    send_message(msg)
+    chrome()
+        .runtime()
+        .send_message(None, &msg, None)
         .await
         .map_err(|e| Error::Send { src: e.as_string() })
         .and_then(|v| serde_wasm_bindgen::from_value::<Message>(v).map_err(serde_error))
-        .and_then(|msg| serde_json::from_str::<module::Response>(&msg.param).map_err(serde_error))
+        .and_then(|msg| {
+            if "error" == msg.func {
+                Err(Error::Send {
+                    src: Some(msg.param),
+                })
+            } else {
+                serde_json::from_str::<module::Response>(&msg.param).map_err(serde_error)
+            }
+        })
         .map(|resp| resp.into())
 }
 
@@ -39,7 +43,7 @@ async fn http_send(req: Request) -> Result<Response, Error> {
 pub fn App() -> impl IntoView {
     let method_element: NodeRef<html::Select> = create_node_ref();
     let uri_element: NodeRef<html::Input> = create_node_ref();
-    let body_element: NodeRef<html::Textarea> = create_node_ref();
+    let body_element: NodeRef<html::Div> = create_node_ref();
     let headers = create_rw_signal(vec![("".to_string(), "".to_string())]);
     let http_send = create_action(|req: &Request| {
         let req = req.clone();
@@ -51,16 +55,17 @@ pub fn App() -> impl IntoView {
     let on_submit = move |_ev: MouseEvent| {
         let uri = uri_element
             .get()
-            .expect("<input> should be mounted")
+            .expect("<UriInput> should be mounted")
             .value();
         let method = method_element
             .get()
-            .expect("<select> should be mounted")
+            .expect("<MethodSelect> should be mounted")
             .value();
         let body = body_element
             .get()
-            .expect("<textarea> should be mounted")
-            .value();
+            .expect("<BodyArea> should be mounted")
+            .text_content()
+            .unwrap_or_default();
 
         let request = Request::new(method, uri, headers.get(), body.into_bytes());
         http_send.dispatch(request);
@@ -68,8 +73,8 @@ pub fn App() -> impl IntoView {
 
     view! {
         <div class="grid grid-cols-2 gap-4">
-            <div class="p-4">
-                <div class="join join-vertical rounded-none w-full">
+            <div class="p-4 min-h-screen">
+                <div class="join join-vertical rounded-none h-full w-full">
                     <div class="join rounded-none w-full join-item">
                         <MethodSelect
                             node_ref=method_element
@@ -84,18 +89,25 @@ pub fn App() -> impl IntoView {
                     <div class="divider"></div>
                     <HeaderTable rows=headers class="w-full join-item" />
                     <div class="divider"></div>
-                    <textarea
+                    <BodyArea
                         node_ref=body_element
-                        class="textarea rounded-none w-full join-item"
-                        placeholder="Body"
-                    ></textarea>
+                        class="textarea rounded-none h-full w-full join-item"
+                    />
                 </div>
             </div>
-            <div class="p-4">
-                <Show
-                    when=move || { !pending.get() }
-                    fallback=|| view! { <span class="loading loading-infinity loading-lg"></span> }
-                >
+            <Show
+                when=move || { !pending.get() }
+                fallback=|| {
+                    view! {
+                        <div class="flex min-h-screen">
+                            <div class="m-auto">
+                                <span class="loading loading-infinity loading-lg"></span>
+                            </div>
+                        </div>
+                    }
+                }
+            >
+                <div class="p-4">
                     <ErrorBoundary fallback=|errors| {
                         view! {
                             <div role="alert" class="alert alert-error">
@@ -124,18 +136,18 @@ pub fn App() -> impl IntoView {
                             </div>
                         }
                     }>{resp}</ErrorBoundary>
-                </Show>
-            </div>
+                </div>
+            </Show>
         </div>
     }
 }
 
 #[derive(Debug, Clone, Snafu)]
 enum Error {
-    #[snafu(display("Failed to send: {src:?}"), context(suffix(false)))]
+    #[snafu(display("{src:?}",), context(suffix(false)))]
     Send { src: Option<String> },
-    #[snafu(display("Invalid uri: {src}"), context(suffix(false)))]
+    #[snafu(display("{src}"), context(suffix(false)))]
     Uri { src: String },
-    #[snafu(display("Failed to serialize: {src:?}"), context(suffix(false)))]
+    #[snafu(display("{src}"), context(suffix(false)))]
     Serialize { src: String },
 }

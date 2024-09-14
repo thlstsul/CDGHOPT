@@ -1,20 +1,23 @@
 use std::{collections::HashMap, str::FromStr};
 
 use http::{HeaderName, HeaderValue, Method};
-use module::{Message, Request, Response};
+use module::{Request, Response};
 use reqwest::{Body, Client, Url};
 use snafu::Snafu;
 use time::{macros::format_description, OffsetDateTime, UtcOffset};
-use tracing::{info, Level};
+use tracing::{error, info, Level};
 use tracing_subscriber::fmt::time::OffsetTime;
 use tracing_web::MakeWebConsoleWriter;
 use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::js_sys::Function;
+use web_extensions::tabs::{self, CreateProperties};
+use web_extensions_sys::chrome;
 
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 #[wasm_bindgen(start)]
-pub fn init() {
+pub fn start() {
     console_error_panic_hook::set_once();
     let offset = UtcOffset::current_local_offset().expect("should get local offset!");
     let timer = OffsetTime::new(
@@ -28,25 +31,69 @@ pub fn init() {
         .with_max_level(Level::INFO)
         .with_writer(MakeWebConsoleWriter::new())
         .init();
+
+    let on_message =
+        { move |request, sender, send_response| on_message(request, sender, send_response) };
+    let closure: Closure<dyn Fn(JsValue, JsValue, Function) -> bool> = Closure::new(on_message);
+    chrome()
+        .runtime()
+        .on_message()
+        .add_listener(closure.as_ref().unchecked_ref());
+    closure.forget();
+
+    let on_clicked = {
+        move || {
+            wasm_bindgen_futures::spawn_local(async {
+                let tab = CreateProperties {
+                    url: "index.html",
+                    active: true,
+                };
+                let _ = tabs::create(tab).await;
+            })
+        }
+    };
+    let closure: Closure<dyn Fn()> = Closure::new(on_clicked);
+    chrome()
+        .action()
+        .on_clicked()
+        .add_listener(closure.as_ref().unchecked_ref());
+    closure.forget();
 }
 
-#[wasm_bindgen]
-pub async fn listen(message: JsValue) -> Result<JsValue, Error> {
-    info!("input: {message:?}");
-    route(message).await
+fn on_message(request: JsValue, _sender: JsValue, send_response: Function) -> bool {
+    info!("input: {request:?}");
+    wasm_bindgen_futures::spawn_local(async move {
+        let this = JsValue::null();
+        match route(request).await {
+            Ok(response) => {
+                if let Err(e) = send_response.call1(&this, &response) {
+                    error!("{e:?}");
+                }
+            }
+            Err(e) => {
+                let message = module::Message::new("error".to_string(), e.to_string());
+                error!("{message:?}");
+                let resp = serde_wasm_bindgen::to_value(&message).unwrap();
+                if let Err(e) = send_response.call1(&this, &resp) {
+                    error!("{e:?}");
+                }
+            }
+        }
+    });
+    true
 }
 
 async fn route(message: JsValue) -> Result<JsValue, Error> {
-    let Message { func, param } = serde_wasm_bindgen::from_value(message)?;
+    let module::Message { func, param } = serde_wasm_bindgen::from_value(message)?;
     match func.as_str() {
         "http_send" => {
             let req = serde_json::from_str(&param)?;
             let resp = send(req).await?;
-            let message = Message::new(func, serde_json::to_string(&resp)?);
+            let message = module::Message::new(func, serde_json::to_string(&resp)?);
             info!("output: {message:?}");
             Ok(serde_wasm_bindgen::to_value(&message)?)
         }
-        _ => todo!(),
+        _ => unimplemented!(),
     }
 }
 
@@ -93,27 +140,30 @@ impl Into<JsValue> for Error {
 
 #[derive(Debug, Snafu)]
 pub enum Error {
-    #[snafu(context(false))]
+    #[snafu(display("Failed to ser/de message: {source}"), context(false))]
     Message { source: serde_wasm_bindgen::Error },
-    #[snafu(context(false))]
+    #[snafu(display("Failed to ser/de request: {source}"), context(false))]
     Request { source: serde_json::Error },
-    #[snafu(context(false))]
+    #[snafu(display("{source}"), context(false))]
     Method { source: http::method::InvalidMethod },
-    #[snafu(context(false))]
+    #[snafu(display("Invalid url: {source}"), context(false))]
     Url { source: url::ParseError },
-    #[snafu(context(false))]
+    #[snafu(display("{source}"), context(false))]
     HeaderName {
         source: http::header::InvalidHeaderName,
     },
-    #[snafu(context(false))]
+    #[snafu(display("{source}"), context(false))]
     HeaderValue {
         source: http::header::InvalidHeaderValue,
     },
-    #[snafu(context(false))]
+    #[snafu(display("Failed to send: {source}",), context(false))]
     Send { source: reqwest::Error },
-    #[snafu(context(false))]
+    #[snafu(
+        display("Header value to string error: {source}"),
+        context(suffix(false))
+    )]
     HeaderValueStr { source: http::header::ToStrError },
-    #[snafu(context(false))]
+    #[snafu(display("{source}"), context(false))]
     LocalDateTime {
         source: time::error::IndeterminateOffset,
     },

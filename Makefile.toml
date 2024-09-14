@@ -16,7 +16,6 @@ rm -rf dist
 mkdir dist
 cp -r extension/* dist/
 mv dist/popup/* dist/
-mv dist/popup/snippets dist/
 rm -rf dist/popup
 '''
 

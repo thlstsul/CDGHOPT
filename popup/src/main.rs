@@ -12,7 +12,7 @@ mod header;
 mod method;
 mod response;
 mod send;
-mod url;
+mod uri;
 
 fn main() {
     console_error_panic_hook::set_once();
