@@ -1,13 +1,10 @@
 [tasks.pack]
 workspace = false
-dependencies = ["build_extension", "restuct", "rebuild"]
+dependencies = ["build_extension", "restuct", "rebuild", "zip"]
 
 [tasks.build_extension]
 workspace = false
 run_task = { name = "build", fork = true }
-
-[tasks.zip]
-
 
 [tasks.restuct]
 script_runner = "@shell"
@@ -123,5 +120,46 @@ fn main() {
     index_html
         .write_all(document.html().as_bytes())
         .expect("Failed to write index.html");
+}
+'''
+
+
+[tasks.zip]
+cwd = "dist"
+script_runner = "@rust"
+script = '''
+//! ```cargo
+//! [dependencies]
+//! zip = "2.2.0"
+//! walkdir = "2.5.0"
+//! ```
+// build.rs
+use std::fs::File;
+use std::io::prelude::*;
+use std::ffi::OsStr;
+use std::path::Path;
+use zip::ZipWriter;
+use zip::write::SimpleFileOptions;
+
+fn main() {
+    let path = Path::new(".");
+    let zip_file_name = OsStr::new("CDGHOPT.zip");
+    let file = File::create(zip_file_name).unwrap();
+    let mut zip = ZipWriter::new(file);
+
+    for entry in walkdir::WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
+        let file_path = entry.path();
+        let relative_path = file_path.strip_prefix(path).unwrap();
+
+        if file_path.is_file() && file_path.file_name().unwrap() != zip_file_name {
+            zip.start_file(relative_path.to_str().unwrap(), SimpleFileOptions::default()).unwrap();
+            let mut file = File::open(file_path).unwrap();
+            let mut buffer = Vec::new();
+            file.read_to_end(&mut buffer).unwrap();
+            zip.write_all(&buffer).unwrap();
+        }
+    }
+
+    zip.finish().unwrap();
 }
 '''

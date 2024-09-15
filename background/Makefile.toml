@@ -1,4 +1,7 @@
 [tasks.build]
+dependencies = ["wasm_build", "copy"]
+
+[tasks.wasm_build]
 install_crate = "wasm-pack"
 command = "wasm-pack"
 args = [
@@ -6,9 +9,15 @@ args = [
     "--release",
     "--no-typescript",
     "--out-dir",
-    "../extension/background/gen",
+    "../extension/background",
     "--out-name",
     "background",
     "--target",
     "web",
 ]
+
+[tasks.copy]
+script_runner = "@shell"
+script = '''
+cp index.js ../extension/background/
+'''
