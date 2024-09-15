@@ -19,3 +19,4 @@ module = { version = "0.2.0", path = "../module" }
 wasm-bindgen-futures = "0.4.43"
 snafu = "0.8.4"
 web-extensions-sys = "0.4.1"
+backon = "1.2.0"

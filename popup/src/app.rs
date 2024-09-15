@@ -6,9 +6,11 @@ use crate::method::MethodSelect;
 use crate::response::Response;
 use crate::send::SendButton;
 use crate::uri::UrlInput;
+use backon::{ConstantBuilder, Retryable};
 use leptos::ev::MouseEvent;
 use leptos::*;
 use module::{self, Message, Request};
+
 use snafu::Snafu;
 use web_extensions_sys::chrome;
 
@@ -16,22 +18,30 @@ fn serde_error(e: impl std::error::Error) -> Error {
     Error::Serialize { src: e.to_string() }
 }
 
-async fn http_send(req: Request) -> Result<Response, Error> {
-    let _ = http::Uri::from_str(&req.uri).map_err(|e| Error::Uri { src: e.to_string() })?;
-    let param = serde_json::to_string(&req).map_err(serde_error)?;
-    let message = Message::new("http_send".to_string(), param);
-    let msg = serde_wasm_bindgen::to_value(&message).map_err(serde_error)?;
+async fn send_message(msg: &Message) -> Result<Message, Error> {
+    let msg = serde_wasm_bindgen::to_value(msg).map_err(serde_error)?;
     chrome()
         .runtime()
         .send_message(None, &msg, None)
         .await
-        .map_err(|e| Error::Send { src: e.as_string() })
+        .map_err(|e| Error::Send {
+            src: format!("{e:?}"),
+        })
         .and_then(|v| serde_wasm_bindgen::from_value::<Message>(v).map_err(serde_error))
+}
+
+async fn http_send(req: Request) -> Result<Response, Error> {
+    let _ = http::Uri::from_str(&req.uri).map_err(|e| Error::Uri { src: e.to_string() })?;
+    let param = serde_json::to_string(&req).map_err(serde_error)?;
+    let msg = Message::new("http_send".to_string(), param);
+
+    let send = || async { send_message(&msg).await };
+
+    send.retry(ConstantBuilder::default().with_max_times(1))
+        .await
         .and_then(|msg| {
             if "error" == msg.func {
-                Err(Error::Send {
-                    src: Some(msg.param),
-                })
+                Err(Error::Send { src: msg.param })
             } else {
                 serde_json::from_str::<module::Response>(&msg.param).map_err(serde_error)
             }
@@ -144,8 +154,8 @@ pub fn App() -> impl IntoView {
 
 #[derive(Debug, Clone, Snafu)]
 enum Error {
-    #[snafu(display("{src:?}",), context(suffix(false)))]
-    Send { src: Option<String> },
+    #[snafu(display("Failed to send: {src}",), context(suffix(false)))]
+    Send { src: String },
     #[snafu(display("{src}"), context(suffix(false)))]
     Uri { src: String },
     #[snafu(display("{src}"), context(suffix(false)))]
