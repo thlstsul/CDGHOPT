@@ -32,8 +32,6 @@ pub fn start() {
         .with_writer(MakeWebConsoleWriter::new())
         .init();
 
-    let on_message =
-        { move |request, sender, send_response| on_message(request, sender, send_response) };
     let closure: Closure<dyn Fn(JsValue, JsValue, Function) -> bool> = Closure::new(on_message);
     chrome()
         .runtime()
@@ -130,12 +128,6 @@ async fn send(
         body: resp.bytes().await?.into(),
         elapsed_time: elapsed_time.whole_milliseconds() as i32,
     })
-}
-
-impl Into<JsValue> for Error {
-    fn into(self) -> JsValue {
-        JsValue::from_str(&self.to_string())
-    }
 }
 
 #[derive(Debug, Snafu)]

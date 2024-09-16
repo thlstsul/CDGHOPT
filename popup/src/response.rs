@@ -13,15 +13,15 @@ pub struct Response {
     pub elapsed_time: i32,
 }
 
-impl Into<Response> for module::Response {
-    fn into(self) -> Response {
+impl From<module::Response> for Response {
+    fn from(val: module::Response) -> Self {
         let module::Response {
             done_date,
             status,
             header,
             body,
             elapsed_time,
-        } = self;
+        } = val;
 
         let mut head_map = HashMap::new();
         for (name, value) in header.into_iter() {
