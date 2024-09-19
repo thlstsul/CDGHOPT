@@ -1,11 +1,9 @@
-use std::str::FromStr;
-
 use crate::body::BodyArea;
 use crate::header::HeaderTable;
 use crate::method::MethodSelect;
 use crate::response::Response;
 use crate::send::SendButton;
-use crate::uri::UrlInput;
+use crate::uri::UriInput;
 use backon::{ConstantBuilder, Retryable};
 use leptos::ev::MouseEvent;
 use leptos::*;
@@ -31,7 +29,6 @@ async fn send_message(msg: &Message) -> Result<Message, Error> {
 }
 
 async fn http_send(req: Request) -> Result<Response, Error> {
-    let _ = http::Uri::from_str(&req.uri).map_err(|e| Error::Uri { src: e.to_string() })?;
     let param = serde_json::to_string(&req).map_err(serde_error)?;
     let msg = Message::new("http_send".to_string(), param);
 
@@ -52,7 +49,7 @@ async fn http_send(req: Request) -> Result<Response, Error> {
 #[component]
 pub fn App() -> impl IntoView {
     let method_element: NodeRef<html::Select> = create_node_ref();
-    let uri_element: NodeRef<html::Input> = create_node_ref();
+    let uri_value = create_rw_signal("".to_string());
     let body_element: NodeRef<html::Div> = create_node_ref();
     let headers = create_rw_signal(vec![("".to_string(), "".to_string())]);
     let http_send = create_action(|req: &Request| {
@@ -63,10 +60,7 @@ pub fn App() -> impl IntoView {
     let resp = http_send.value();
 
     let on_submit = move |_ev: MouseEvent| {
-        let uri = uri_element
-            .get()
-            .expect("<UriInput> should be mounted")
-            .value();
+        let uri = uri_value.get();
         let method = method_element
             .get()
             .expect("<MethodSelect> should be mounted")
@@ -90,10 +84,7 @@ pub fn App() -> impl IntoView {
                             node_ref=method_element
                             class="select rounded-none join-item"
                         />
-                        <UrlInput
-                            node_ref=uri_element
-                            class="input rounded-none w-full join-item"
-                        />
+                        <UriInput value=uri_value class="input rounded-none w-full join-item" />
                         <SendButton on:click=on_submit class="btn btn-active join-item" />
                     </div>
                     <div class="divider"></div>
@@ -156,8 +147,6 @@ pub fn App() -> impl IntoView {
 enum Error {
     #[snafu(display("Failed to send: {src}",), context(suffix(false)))]
     Send { src: String },
-    #[snafu(display("{src}"), context(suffix(false)))]
-    Uri { src: String },
     #[snafu(display("{src}"), context(suffix(false)))]
     Serialize { src: String },
 }
