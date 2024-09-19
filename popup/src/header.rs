@@ -1,4 +1,51 @@
 use leptos::*;
+use thaw::{AutoComplete, AutoCompleteOption, Theme, ThemeProvider};
+
+#[component]
+fn HeaderName(
+    value: RwSignal<String>,
+    placeholder: &'static str,
+    #[prop(into)] on_change: Callback<String>,
+) -> impl IntoView {
+    let options = create_memo(move |_| {
+        let input = value.get();
+
+        let input = input.to_lowercase();
+        let mut ops: Vec<_> = HEADERS
+            .iter()
+            .filter(|&h| h.to_lowercase().starts_with(&input))
+            .map(|header| AutoCompleteOption {
+                label: header.to_string(),
+                value: header.to_string(),
+            })
+            .collect();
+
+        if !input.is_empty() {
+            let current = AutoCompleteOption {
+                label: input.clone(),
+                value: input.clone(),
+            };
+            if !ops.contains(&current) {
+                ops.insert(0, current);
+            }
+        }
+
+        ops
+    });
+
+    view! {
+        <ThemeProvider theme=Theme::dark()>
+            <AutoComplete
+                value=value
+                options=options
+                placeholder=placeholder
+                on_select=move |value| {
+                    on_change.call(value);
+                }
+            />
+        </ThemeProvider>
+    }
+}
 
 #[component]
 pub fn HeaderTable(rows: RwSignal<Vec<(String, String)>>, class: &'static str) -> impl IntoView {
@@ -9,30 +56,23 @@ pub fn HeaderTable(rows: RwSignal<Vec<(String, String)>>, class: &'static str) -
                     each=move || rows.get().into_iter().enumerate()
                     key=|(index, state)| format!("{}-{}", index, state.0)
                     children=move |(index, _)| {
-                        let row: Memo<(String, String)> = create_memo(move |_| {
-                            rows.get().get(index).unwrap().clone()
-                        });
+                        let row = create_memo(move |_| rows.get().get(index).unwrap().clone());
                         let is_last = index == rows.get().len() - 1;
                         view! {
-                            // TODO valid header
                             <tr>
                                 <td>
-                                    <input
-                                        type="text"
-                                        placeholder="Header name..."
-                                        prop:value=row.get().0
-                                        on:focusout=move |ev| {
+                                    <HeaderName
+                                        value=create_rw_signal(row.get().0.clone())
+                                        on_change=move |new_value: String| {
                                             rows.update(|rows| {
                                                 let row = rows.get_mut(index).unwrap();
-                                                let value = event_target_value(&ev);
-                                                let no_empty = !value.is_empty();
-                                                row.0 = value;
-                                                if is_last && no_empty {
+                                                row.0 = new_value.clone();
+                                                if is_last && !new_value.is_empty() {
                                                     rows.push((String::new(), String::new()));
                                                 }
                                             });
                                         }
-                                        class="input input-sm rounded-none w-full"
+                                        placeholder="Header name..."
                                     />
                                 </td>
                                 <td>
@@ -78,3 +118,87 @@ pub fn HeaderTable(rows: RwSignal<Vec<(String, String)>>, class: &'static str) -
         </table>
     }
 }
+
+const HEADERS: &[&str] = &[
+    "accept",
+    "accept-charset",
+    "accept-encoding",
+    "accept-language",
+    "accept-ranges",
+    "access-control-allow-credentials",
+    "access-control-allow-headers",
+    "access-control-allow-methods",
+    "access-control-allow-origin",
+    "access-control-expose-headers",
+    "access-control-max-age",
+    "access-control-request-headers",
+    "access-control-request-method",
+    "age",
+    "allow",
+    "alt-svc",
+    "authorization",
+    "cache-control",
+    "cache-status",
+    "cdn-cache-control",
+    "connection",
+    "content-disposition",
+    "content-encoding",
+    "content-language",
+    "content-length",
+    "content-location",
+    "content-range",
+    "content-security-policy",
+    "content-security-policy-report-only",
+    "content-type",
+    "cookie",
+    "date",
+    "dnt",
+    "etag",
+    "expect",
+    "expires",
+    "forwarded",
+    "from",
+    "host",
+    "if-match",
+    "if-modified-since",
+    "if-none-match",
+    "if-range",
+    "if-unmodified-since",
+    "last-modified",
+    "link",
+    "location",
+    "max-forwards",
+    "origin",
+    "pragma",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "public-key-pins",
+    "public-key-pins-report-only",
+    "range",
+    "referer",
+    "referrer-policy",
+    "refresh",
+    "retry-after",
+    "sec-websocket-accept",
+    "sec-websocket-extensions",
+    "sec-websocket-key",
+    "sec-websocket-protocol",
+    "sec-websocket-version",
+    "server",
+    "set-cookie",
+    "strict-transport-security",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+    "upgrade-insecure-requests",
+    "user-agent",
+    "vary",
+    "via",
+    "warning",
+    "www-authenticate",
+    "x-content-type-options",
+    "x-dns-prefetch-control",
+    "x-frame-options",
+    "x-xss-protection",
+];
