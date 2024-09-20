@@ -10,6 +10,7 @@ use leptos::*;
 use module::{self, Message, Request};
 
 use snafu::Snafu;
+use tracing::info;
 use web_extensions_sys::chrome;
 
 fn serde_error(e: impl std::error::Error) -> Error {
@@ -48,7 +49,7 @@ async fn http_send(req: Request) -> Result<Response, Error> {
 
 #[component]
 pub fn App() -> impl IntoView {
-    let method_element: NodeRef<html::Select> = create_node_ref();
+    let method_value = create_rw_signal("GET".to_string());
     let uri_value = create_rw_signal("".to_string());
     let body_element: NodeRef<html::Div> = create_node_ref();
     let headers = create_rw_signal(vec![("".to_string(), "".to_string())]);
@@ -58,13 +59,15 @@ pub fn App() -> impl IntoView {
     });
     let pending = http_send.pending();
     let resp = http_send.value();
+    let body_editable = move || {
+        let method = method_value.get();
+        "PATCH" == method || "POST" == method || "PUT" == method
+    };
 
     let on_submit = move |_ev: MouseEvent| {
         let uri = uri_value.get();
-        let method = method_element
-            .get()
-            .expect("<MethodSelect> should be mounted")
-            .value();
+        let method = method_value.get();
+        info!("{method}");
         let body = body_element
             .get()
             .expect("<BodyArea> should be mounted")
@@ -80,10 +83,7 @@ pub fn App() -> impl IntoView {
             <div class="p-4 min-h-screen">
                 <div class="join join-vertical rounded-none h-full w-full">
                     <div class="join rounded-none w-full join-item">
-                        <MethodSelect
-                            node_ref=method_element
-                            class="select rounded-none join-item"
-                        />
+                        <MethodSelect value=method_value class="select rounded-none join-item" />
                         <UriInput value=uri_value class="input rounded-none w-full join-item" />
                         <SendButton on:click=on_submit class="btn btn-active join-item" />
                     </div>
@@ -92,6 +92,7 @@ pub fn App() -> impl IntoView {
                     <div class="divider"></div>
                     <BodyArea
                         node_ref=body_element
+                        contenteditable=body_editable
                         class="textarea rounded-none h-full w-full join-item"
                     />
                 </div>

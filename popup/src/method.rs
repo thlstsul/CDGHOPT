@@ -1,9 +1,16 @@
 use leptos::*;
 
 #[component]
-pub fn MethodSelect(node_ref: NodeRef<html::Select>, class: &'static str) -> impl IntoView {
+pub fn MethodSelect(value: RwSignal<String>, class: &'static str) -> impl IntoView {
     view! {
-        <select node_ref=node_ref class=class>
+        <select
+            prop:value=value
+            class=class
+            on:change=move |ev| {
+                let new_value = event_target_value(&ev);
+                value.set(new_value);
+            }
+        >
             <option value="CONNECT">CONNECT</option>
             <option value="DELETE">DELETE</option>
             <option value="GET" selected>
