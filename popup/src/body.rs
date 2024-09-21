@@ -10,7 +10,7 @@ pub fn BodyArea(
         <div
             node_ref=node_ref
             class=class
-            contenteditable=move || format!("{}", contenteditable.get())
+            contenteditable=move || contenteditable.get().to_string()
         ></div>
     }
 }
