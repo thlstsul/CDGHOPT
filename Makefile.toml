@@ -130,7 +130,7 @@ script_runner = "@rust"
 script = '''
 //! ```cargo
 //! [dependencies]
-//! zip = { version = "2.2.0", default-features = false }
+//! zip = { version = "2.2.0", default-features = false, features = ["deflate"] }
 //! walkdir = "2.5.0"
 //! ```
 // build.rs
