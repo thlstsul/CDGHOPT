@@ -1,7 +1,10 @@
 use std::{collections::HashMap, str::FromStr};
 
 use http::{HeaderName, HeaderValue, Method};
-use module::{Request, Response};
+use module::{
+    http::{Request, Response},
+    Message,
+};
 use reqwest::{Body, Client, Url};
 use snafu::Snafu;
 use time::{macros::format_description, OffsetDateTime, UtcOffset};
@@ -69,7 +72,10 @@ fn on_message(request: JsValue, _sender: JsValue, send_response: Function) -> bo
                 }
             }
             Err(e) => {
-                let message = module::Message::new("error".to_string(), e.to_string());
+                let message = module::Message {
+                    code: "error".to_string(),
+                    value: e.to_string(),
+                };
                 error!("{message:?}");
                 let resp = serde_wasm_bindgen::to_value(&message).unwrap();
                 if let Err(e) = send_response.call1(&this, &resp) {
@@ -82,12 +88,12 @@ fn on_message(request: JsValue, _sender: JsValue, send_response: Function) -> bo
 }
 
 async fn route(message: JsValue) -> Result<JsValue, Error> {
-    let module::Message { func, param } = serde_wasm_bindgen::from_value(message)?;
-    match func.as_str() {
+    let module::Message { code, value } = serde_wasm_bindgen::from_value(message)?;
+    match code.as_str() {
         "http_send" => {
-            let req = serde_json::from_str(&param)?;
+            let req = serde_json::from_str(&value)?;
             let resp = send(req).await?;
-            let message = module::Message::new(func, serde_json::to_string(&resp)?);
+            let message: Message = resp.into();
             info!("output: {message:?}");
             Ok(serde_wasm_bindgen::to_value(&message)?)
         }

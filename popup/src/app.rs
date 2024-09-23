@@ -7,45 +7,13 @@ use crate::uri::UriInput;
 use backon::{ConstantBuilder, Retryable};
 use leptos::ev::MouseEvent;
 use leptos::*;
-use module::{self, Message, Request};
+use module::{
+    http::{self, Request},
+    Message,
+};
 
 use snafu::Snafu;
-use tracing::info;
 use web_extensions_sys::chrome;
-
-fn serde_error(e: impl std::error::Error) -> Error {
-    Error::Serialize { src: e.to_string() }
-}
-
-async fn send_message(msg: &Message) -> Result<Message, Error> {
-    let msg = serde_wasm_bindgen::to_value(msg).map_err(serde_error)?;
-    chrome()
-        .runtime()
-        .send_message(None, &msg, None)
-        .await
-        .map_err(|e| Error::Send {
-            src: format!("{e:?}"),
-        })
-        .and_then(|v| serde_wasm_bindgen::from_value::<Message>(v).map_err(serde_error))
-}
-
-async fn http_send(req: Request) -> Result<Response, Error> {
-    let param = serde_json::to_string(&req).map_err(serde_error)?;
-    let msg = Message::new("http_send".to_string(), param);
-
-    let send = || async { send_message(&msg).await };
-
-    send.retry(ConstantBuilder::default().with_max_times(1))
-        .await
-        .and_then(|msg| {
-            if "error" == msg.func {
-                Err(Error::Send { src: msg.param })
-            } else {
-                serde_json::from_str::<module::Response>(&msg.param).map_err(serde_error)
-            }
-        })
-        .map(|resp| resp.into())
-}
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -53,21 +21,21 @@ pub fn App() -> impl IntoView {
     let uri_value = create_rw_signal("".to_string());
     let body_element: NodeRef<html::Div> = create_node_ref();
     let headers = create_rw_signal(vec![("".to_string(), "".to_string())]);
+    let body_editable = move || {
+        let method = method_value.get();
+        "PATCH" == method || "POST" == method || "PUT" == method
+    };
+
     let http_send = create_action(|req: &Request| {
         let req = req.clone();
         http_send(req)
     });
     let pending = http_send.pending();
     let resp = http_send.value();
-    let body_editable = move || {
-        let method = method_value.get();
-        "PATCH" == method || "POST" == method || "PUT" == method
-    };
 
     let on_submit = move |_ev: MouseEvent| {
         let uri = uri_value.get();
         let method = method_value.get();
-        info!("{method}");
         let body = body_element
             .get()
             .expect("<BodyArea> should be mounted")
@@ -142,6 +110,44 @@ pub fn App() -> impl IntoView {
             </Show>
         </div>
     }
+}
+
+fn serde_error(e: impl std::error::Error) -> Error {
+    Error::Serialize { src: e.to_string() }
+}
+
+async fn http_send(req: Request) -> Result<Response, Error> {
+    let msg = req.try_into().map_err(serde_error)?;
+
+    send_message(&msg)
+        .await
+        .and_then(|msg| serde_json::from_str::<http::Response>(&msg.value).map_err(serde_error))
+        .map(|resp| resp.into())
+}
+
+async fn send_message(msg: &Message) -> Result<Message, Error> {
+    let msg = serde_wasm_bindgen::to_value(msg).map_err(serde_error)?;
+
+    let send = || async {
+        chrome()
+            .runtime()
+            .send_message(None, &msg, None)
+            .await
+            .map_err(|e| Error::Send {
+                src: format!("{e:?}"),
+            })
+            .and_then(|v| serde_wasm_bindgen::from_value::<Message>(v).map_err(serde_error))
+    };
+
+    send.retry(ConstantBuilder::default().with_max_times(1))
+        .await
+        .and_then(|msg| {
+            if "error" == msg.code {
+                Err(Error::Send { src: msg.value })
+            } else {
+                Ok(msg)
+            }
+        })
 }
 
 #[derive(Debug, Clone, Snafu)]

@@ -13,9 +13,9 @@ pub struct Response {
     pub elapsed_time: i32,
 }
 
-impl From<module::Response> for Response {
-    fn from(val: module::Response) -> Self {
-        let module::Response {
+impl From<module::http::Response> for Response {
+    fn from(val: module::http::Response) -> Self {
+        let module::http::Response {
             done_date,
             status,
             header,
