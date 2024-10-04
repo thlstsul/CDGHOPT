@@ -5,7 +5,7 @@ use thaw::{AutoComplete, AutoCompleteOption, Theme, ThemeProvider};
 fn HeaderName(
     value: RwSignal<String>,
     placeholder: &'static str,
-    #[prop(into)] on_change: Callback<String>,
+    #[prop(into)] on_select: Callback<String>,
 ) -> impl IntoView {
     let options = create_memo(move |_| {
         let input = value.get();
@@ -35,20 +35,14 @@ fn HeaderName(
 
     view! {
         <ThemeProvider theme=Theme::dark()>
-            <AutoComplete
-                value=value
-                options=options
-                placeholder=placeholder
-                on_select=move |value| {
-                    on_change.call(value);
-                }
-            />
+            <AutoComplete value=value options=options placeholder=placeholder on_select=on_select />
         </ThemeProvider>
     }
 }
 
 #[component]
 pub fn HeaderTable(rows: RwSignal<Vec<(String, String)>>, class: &'static str) -> impl IntoView {
+    // TODO debug header name on select OwnerDisposed(Owner(NodeId(62v1)))
     view! {
         <table class=class>
             <tbody>
@@ -63,11 +57,11 @@ pub fn HeaderTable(rows: RwSignal<Vec<(String, String)>>, class: &'static str) -
                                 <td>
                                     <HeaderName
                                         value=create_rw_signal(row.get().0.clone())
-                                        on_change=move |new_value: String| {
+                                        on_select=move |new_value: String| {
                                             rows.update(|rows| {
                                                 let row = rows.get_mut(index).unwrap();
-                                                row.0 = new_value.clone();
-                                                if is_last && !new_value.is_empty() {
+                                                row.0 = new_value;
+                                                if is_last {
                                                     rows.push((String::new(), String::new()));
                                                 }
                                             });

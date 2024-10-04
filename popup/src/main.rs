@@ -8,7 +8,9 @@ use tracing_web::MakeWebConsoleWriter;
 
 mod app;
 mod body;
+mod browser;
 mod header;
+mod log;
 mod method;
 mod response;
 mod send;

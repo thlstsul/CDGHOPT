@@ -12,9 +12,11 @@ use tracing::{error, info, Level};
 use tracing_subscriber::fmt::time::OffsetTime;
 use tracing_web::MakeWebConsoleWriter;
 use wasm_bindgen::prelude::*;
+#[allow(deprecated)]
+use wasm_bindgen::JsStatic;
 use wasm_bindgen_futures::js_sys::Function;
 use web_extensions::tabs::{self, CreateProperties};
-use web_extensions_sys::chrome;
+use web_extensions_sys::Browser;
 
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
@@ -36,7 +38,7 @@ pub fn start() {
         .init();
 
     let closure: Closure<dyn Fn(JsValue, JsValue, Function) -> bool> = Closure::new(on_message);
-    chrome()
+    browser()
         .runtime()
         .on_message()
         .add_listener(closure.as_ref().unchecked_ref());
@@ -54,15 +56,16 @@ pub fn start() {
         }
     };
     let closure: Closure<dyn Fn()> = Closure::new(on_clicked);
-    chrome()
+    browser()
         .action()
         .on_clicked()
         .add_listener(closure.as_ref().unchecked_ref());
     closure.forget();
+
+    info!("background started");
 }
 
 fn on_message(request: JsValue, _sender: JsValue, send_response: Function) -> bool {
-    info!("input: {request:?}");
     wasm_bindgen_futures::spawn_local(async move {
         let this = JsValue::null();
         match route(request).await {
@@ -94,7 +97,6 @@ async fn route(message: JsValue) -> Result<JsValue, Error> {
             let req = serde_json::from_str(&value)?;
             let resp = send(req).await?;
             let message: Message = resp.into();
-            info!("output: {message:?}");
             Ok(serde_wasm_bindgen::to_value(&message)?)
         }
         _ => unimplemented!(),
@@ -134,6 +136,11 @@ async fn send(
         body: resp.bytes().await?.into(),
         elapsed_time: elapsed_time.whole_milliseconds() as i32,
     })
+}
+
+#[allow(deprecated)]
+fn browser() -> &'static JsStatic<Browser> {
+    web_extensions_sys::chrome()
 }
 
 #[derive(Debug, Snafu)]

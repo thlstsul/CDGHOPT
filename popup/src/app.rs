@@ -1,39 +1,48 @@
-use crate::body::BodyArea;
 use crate::header::HeaderTable;
+use crate::log::{save_log, LogContent, LogDrawer, LogIndexItem};
 use crate::method::MethodSelect;
-use crate::response::Response;
 use crate::send::SendButton;
 use crate::uri::UriInput;
+use crate::{body::BodyArea, browser::browser};
 use backon::{ConstantBuilder, Retryable};
-use leptos::ev::MouseEvent;
 use leptos::*;
 use module::{
-    http::{self, Request},
+    http::{self, Request, Response},
     Message,
 };
 
 use snafu::Snafu;
-use web_extensions_sys::chrome;
+use tracing::error;
 
 #[component]
 pub fn App() -> impl IntoView {
-    let method_value = create_rw_signal("GET".to_string());
+    let log_indexes: RwSignal<Vec<LogIndexItem>> = create_rw_signal(Vec::new());
+    let method_value = create_rw_signal("".to_string());
     let uri_value = create_rw_signal("".to_string());
     let body_element: NodeRef<html::Div> = create_node_ref();
-    let headers = create_rw_signal(vec![("".to_string(), "".to_string())]);
+    let body_value = create_rw_signal("".to_string());
+    let header_value = create_rw_signal(vec![("".to_string(), "".to_string())]);
     let body_editable = move || {
         let method = method_value.get();
         "PATCH" == method || "POST" == method || "PUT" == method
     };
 
-    let http_send = create_action(|req: &Request| {
-        let req = req.clone();
-        http_send(req)
+    let http_send = create_action(|req_param: &(Request, RwSignal<Vec<LogIndexItem>>)| {
+        let req = req_param.0.clone();
+        let log_indexes = req_param.1;
+        async move {
+            let resp = http_send(req.clone()).await?;
+
+            let _ = save_log(log_indexes, req, resp.clone())
+                .await
+                .inspect_err(|e| error!("{e:?}"));
+            Ok::<crate::response::Response, Error>(resp.into())
+        }
     });
     let pending = http_send.pending();
     let resp = http_send.value();
 
-    let on_submit = move |_ev: MouseEvent| {
+    let on_submit = move |_| {
         let uri = uri_value.get();
         let method = method_value.get();
         let body = body_element
@@ -42,11 +51,24 @@ pub fn App() -> impl IntoView {
             .text_content()
             .unwrap_or_default();
 
-        let request = Request::new(method, uri, headers.get(), body.into_bytes());
-        http_send.dispatch(request);
+        let request = Request::new(method, uri, header_value.get(), body.into_bytes());
+        http_send.dispatch((request, log_indexes));
     };
 
     view! {
+        <LogDrawer
+            indexes=log_indexes
+            on_select=move |content: LogContent| {
+                let LogContent { request: Request { method, uri, header, body }, response } = content;
+                method_value.set(method);
+                uri_value.set(uri);
+                let mut header: Vec<(String, String)> = header.into_iter().collect();
+                header.push(("".to_string(), "".to_string()));
+                header_value.set(header);
+                body_value.set(String::from_utf8(body).unwrap_or_default());
+                resp.set(Some(Ok(response.into())));
+            }
+        />
         <div class="grid grid-cols-2 gap-4">
             <div class="p-4 min-h-screen">
                 <div class="join join-vertical rounded-none h-full w-full">
@@ -56,10 +78,11 @@ pub fn App() -> impl IntoView {
                         <SendButton on:click=on_submit class="btn btn-active join-item" />
                     </div>
                     <div class="divider"></div>
-                    <HeaderTable rows=headers class="w-full join-item" />
+                    <HeaderTable rows=header_value class="w-full join-item" />
                     <div class="divider"></div>
                     <BodyArea
                         node_ref=body_element
+                        value=body_value
                         contenteditable=body_editable
                         class="textarea rounded-none h-full w-full join-item"
                     />
@@ -112,24 +135,19 @@ pub fn App() -> impl IntoView {
     }
 }
 
-fn serde_error(e: impl std::error::Error) -> Error {
-    Error::Serialize { src: e.to_string() }
-}
-
 async fn http_send(req: Request) -> Result<Response, Error> {
     let msg = req.try_into().map_err(serde_error)?;
 
     send_message(&msg)
         .await
         .and_then(|msg| serde_json::from_str::<http::Response>(&msg.value).map_err(serde_error))
-        .map(|resp| resp.into())
 }
 
 async fn send_message(msg: &Message) -> Result<Message, Error> {
     let msg = serde_wasm_bindgen::to_value(msg).map_err(serde_error)?;
 
     let send = || async {
-        chrome()
+        browser()
             .runtime()
             .send_message(None, &msg, None)
             .await
@@ -148,6 +166,10 @@ async fn send_message(msg: &Message) -> Result<Message, Error> {
                 Ok(msg)
             }
         })
+}
+
+fn serde_error(e: impl std::error::Error) -> Error {
+    Error::Serialize { src: e.to_string() }
 }
 
 #[derive(Debug, Clone, Snafu)]

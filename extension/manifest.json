@@ -1,6 +1,6 @@
 {
     "name": "CDGHOPT",
-    "version": "0.3.0",
+    "version": "0.5.0",
     "manifest_version": 3,
     "description": "http client",
     "action": {
@@ -11,7 +11,9 @@
     },
     "permissions": [
         "tabs",
-        "webRequest"
+        "webRequest",
+        "storage",
+        "unlimitedStorage"
     ],
     "host_permissions": [
         "*://*/*"

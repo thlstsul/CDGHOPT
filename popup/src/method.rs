@@ -2,6 +2,7 @@ use leptos::*;
 
 #[component]
 pub fn MethodSelect(value: RwSignal<String>, class: &'static str) -> impl IntoView {
+    value.set("GET".to_string());
     view! {
         <select
             prop:value=value
