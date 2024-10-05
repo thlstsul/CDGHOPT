@@ -4,7 +4,7 @@ use module::http::{Request, Response};
 use serde::ser::Serializer as _;
 use serde::{Deserialize, Serialize};
 use serde_wasm_bindgen::Serializer;
-use time::{macros::format_description, OffsetDateTime};
+use time::{ext::NumericalDuration, macros::format_description, OffsetDateTime};
 use tracing::error;
 use uuid::Uuid;
 use wasm_bindgen::JsValue;
@@ -40,21 +40,23 @@ pub fn LogDrawer(
     let load_index = create_action(|indexes: &RwSignal<Vec<LogIndexItem>>| load_index(*indexes));
     load_index.dispatch(indexes);
 
-    let get_log = create_action(move |id: &String| {
-        let id = id.clone();
+    let get_log = create_action(move |id: &Uuid| {
+        let id = *id;
         async move {
-            let content = get_log(&id).await;
+            let content = get_log(id).await;
             if let Ok(content) = content {
                 on_select.call(content);
             }
         }
     });
 
-    let star = create_action(|index_param: &(RwSignal<Vec<LogIndexItem>>, String)| {
+    let star = create_action(|index_param: &(RwSignal<Vec<LogIndexItem>>, Uuid)| {
         let indexes = index_param.0;
-        let id = index_param.1.clone();
+        let id = index_param.1;
         async move {
-            let _ = star(indexes, &id).await.inspect(|e| error!("{e:?}"));
+            let _ = star(indexes, id)
+                .await
+                .inspect(|e| error!("Failed to star: {e:?}"));
         }
     });
 
@@ -94,13 +96,11 @@ pub fn LogDrawer(
                                         <div class="card-actions justify-end">
                                             <StarButton
                                                 checked=index.star
-                                                on_change=move |_| {
-                                                    star.dispatch((indexes, index.id.to_string()))
-                                                }
+                                                on_change=move |_| { star.dispatch((indexes, index.id)) }
                                             />
                                             <div
                                                 class="badge badge-primary"
-                                                on:click=move |_| get_log.dispatch(index.id.to_string())
+                                                on:click=move |_| get_log.dispatch(index.id)
                                             >
                                                 Open
                                             </div>
@@ -155,15 +155,38 @@ pub fn StarButton(checked: bool, on_change: impl FnMut(Event) + 'static) -> impl
 }
 
 async fn load_index(indexes: RwSignal<Vec<LogIndexItem>>) {
-    let index_items = get_local(INDEXES)
+    let mut index_items: Vec<LogIndexItem> = get_local(INDEXES)
         .await
-        .inspect_err(|e| error!("{e:?}"))
+        .inspect_err(|e| error!("Failed to load: {e:?}"))
         .unwrap_or_default();
+
+    let ninety_day_before = OffsetDateTime::now_local().map(|now| now.checked_sub(90.days()));
+    let mut i = index_items.len();
+    if let Ok(Some(ninety_day_before)) = ninety_day_before {
+        for (ii, item) in index_items.iter().enumerate() {
+            if !item.star && item.done_date < ninety_day_before {
+                i = ii;
+                break;
+            }
+        }
+    }
+    let delete_items = index_items.split_off(i);
+
     indexes.set(index_items);
+
+    for item in delete_items {
+        let key = JsValue::from_str(&item.id.to_string());
+        let _ = browser()
+            .storage()
+            .local()
+            .remove(&key)
+            .await
+            .inspect_err(|e| error!("Failed to delete: {e:?}"));
+    }
 }
 
-async fn get_log(id: &str) -> Result<LogContent, JsValue> {
-    get_local(id).await
+async fn get_log(id: Uuid) -> Result<LogContent, JsValue> {
+    get_local(&id.to_string()).await
 }
 
 pub async fn save_log(
@@ -207,18 +230,12 @@ pub async fn save_log(
     Ok(())
 }
 
-pub async fn star(indexes: RwSignal<Vec<LogIndexItem>>, id: &str) -> Result<(), JsValue> {
+pub async fn star(indexes: RwSignal<Vec<LogIndexItem>>, id: Uuid) -> Result<(), JsValue> {
     indexes.update(|indexes| {
         let i = indexes
             .iter()
             .enumerate()
-            .filter_map(|(i, index)| {
-                if id == index.id.to_string() {
-                    Some(i)
-                } else {
-                    None
-                }
-            })
+            .filter_map(|(i, index)| if id == index.id { Some(i) } else { None })
             .next();
 
         if let Some(i) = i {
