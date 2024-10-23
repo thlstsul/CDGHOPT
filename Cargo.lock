@@ -111,7 +111,7 @@ checksum = "ace50bade8e6234aa140d9a2f552bbee1db4d353f69b8217bc503490fc1a9f26"
 
 [[package]]
 name = "background"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "console_error_panic_hook",
  "http",
@@ -1143,7 +1143,7 @@ dependencies = [
 
 [[package]]
 name = "module"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -1442,7 +1442,7 @@ checksum = "953ec861398dccce10c670dfeaf3ec4911ca479e9c02154b3a215178c5f566f2"
 
 [[package]]
 name = "popup"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "backon",
  "console_error_panic_hook",

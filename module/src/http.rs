@@ -27,7 +27,7 @@ impl Request {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Response {
-    #[serde(with = "time::serde::timestamp")]
+    #[serde(with = "time::serde::iso8601")]
     pub done_date: OffsetDateTime,
     pub status: u16,
     pub header: HashMap<String, Vec<u8>>,

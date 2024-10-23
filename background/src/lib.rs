@@ -37,54 +37,47 @@ pub fn start() {
         .with_writer(MakeWebConsoleWriter::new())
         .init();
 
-    let closure: Closure<dyn Fn(JsValue, JsValue, Function) -> bool> = Closure::new(on_message);
-    browser()
-        .runtime()
-        .on_message()
-        .add_listener(closure.as_ref().unchecked_ref());
-    closure.forget();
-
-    let on_clicked = {
-        move || {
-            wasm_bindgen_futures::spawn_local(async {
-                let tab = CreateProperties {
-                    url: "index.html",
-                    active: true,
-                };
-                let _ = tabs::create(tab).await;
-            })
-        }
-    };
-    let closure: Closure<dyn Fn()> = Closure::new(on_clicked);
+    let on_clicked: Closure<dyn Fn()> = Closure::new(on_clicked);
     browser()
         .action()
         .on_clicked()
-        .add_listener(closure.as_ref().unchecked_ref());
-    closure.forget();
+        .add_listener(on_clicked.as_ref().unchecked_ref());
+    on_clicked.forget();
+
+    let on_message: Closure<dyn Fn(JsValue, JsValue, Function) -> bool> = Closure::new(on_message);
+    browser()
+        .runtime()
+        .on_message()
+        .add_listener(on_message.as_ref().unchecked_ref());
+    on_message.forget();
 
     info!("background started");
 }
 
+fn on_clicked() {
+    wasm_bindgen_futures::spawn_local(async {
+        let tab = CreateProperties {
+            url: "index.html",
+            active: true,
+        };
+        let _ = tabs::create(tab).await;
+    })
+}
+
 fn on_message(request: JsValue, _sender: JsValue, send_response: Function) -> bool {
     wasm_bindgen_futures::spawn_local(async move {
-        let this = JsValue::null();
-        match route(request).await {
-            Ok(response) => {
-                if let Err(e) = send_response.call1(&this, &response) {
-                    error!("{e:?}");
-                }
-            }
+        let this = JsValue::NULL;
+        let resp = match route(request).await {
+            Ok(response) => response,
             Err(e) => {
-                let message = module::Message {
-                    code: "error".to_string(),
-                    value: e.to_string(),
-                };
+                let message: Message = e.into();
                 error!("{message:?}");
-                let resp = serde_wasm_bindgen::to_value(&message).unwrap();
-                if let Err(e) = send_response.call1(&this, &resp) {
-                    error!("{e:?}");
-                }
+                serde_wasm_bindgen::to_value(&message).unwrap()
             }
+        };
+
+        if let Err(e) = send_response.call1(&this, &resp) {
+            error!("{e:?}");
         }
     });
     true
@@ -172,4 +165,13 @@ pub enum Error {
     LocalDateTime {
         source: time::error::IndeterminateOffset,
     },
+}
+
+impl From<Error> for Message {
+    fn from(value: Error) -> Self {
+        Self {
+            code: "error".to_string(),
+            value: value.to_string(),
+        }
+    }
 }
