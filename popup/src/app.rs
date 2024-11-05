@@ -174,7 +174,7 @@ fn serde_error(e: impl std::error::Error) -> Error {
 
 #[derive(Debug, Clone, Snafu)]
 enum Error {
-    #[snafu(display("Failed to send: {src}",), context(suffix(false)))]
+    #[snafu(display("Failed to send: {src}"), context(suffix(false)))]
     Send { src: String },
     #[snafu(display("{src}"), context(suffix(false)))]
     Serialize { src: String },

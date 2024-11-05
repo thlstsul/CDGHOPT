@@ -1,24 +1,26 @@
 [package]
 name = "popup"
-version = "0.5.2"
+version = "0.6.0"
 edition = "2021"
 
 [dependencies]
-console_error_panic_hook = "0.1.7"
-leptos = { version = "0.6.13", features = ["csr"] }
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3", features = ["fmt", "local-time"] }
-tracing-web = "0.1.3"
-time = { version = "0.3", features = ["wasm-bindgen", "macros", "serde"] }
-http = { version = "1.1.0", default-features = false }
-wasm-bindgen = "0.2.93"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-serde-wasm-bindgen = "0.6"
-module = { version = "0.5.2", path = "../module" }
-wasm-bindgen-futures = "0.4.43"
-snafu = "0.8.4"
-web-extensions-sys = "0.4.1"
+console_error_panic_hook.workspace = true
 backon = "1.2.0"
+http.workspace = true
+http-types = { version = "2.12.0", default-features = false }
+leptos = { version = "0.6.13", features = ["csr"] }
+snafu.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde-wasm-bindgen.workspace = true
+module.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-web.workspace = true
 thaw = { version = "0.3.4", features = ["csr"] }
+time.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+web-extensions-sys.workspace = true
 uuid = { version = "1.10.0", features = ["v7", "js", "serde"] }
+encoding = "0.2.33"

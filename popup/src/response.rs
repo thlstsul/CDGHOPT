@@ -1,8 +1,16 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
-use http::{HeaderValue, StatusCode};
+use encoding::{
+    all::{ASCII, GB18030, GBK, ISO_8859_1, UTF_8},
+    DecoderTrap, Encoding,
+};
+use http::{header::CONTENT_TYPE, HeaderValue, StatusCode};
+use http_types::Mime;
 use leptos::*;
+use serde_json::Value;
+use snafu::Snafu;
 use time::{macros::format_description, OffsetDateTime};
+use tracing::error;
 
 #[derive(Debug, Clone)]
 pub struct Response {
@@ -46,18 +54,59 @@ impl From<module::http::Response> for Response {
 
 impl IntoView for Response {
     fn into_view(self) -> View {
-        // TODO parse
-        let body = String::from_utf8(self.body);
+        let content_type = self
+            .header
+            .get(CONTENT_TYPE.as_str())
+            .map(|c| Mime::from_str(c))
+            .transpose()
+            .unwrap_or(None);
+
         view! {
             <Stat status=self.status elapsed_time=self.elapsed_time done_date=self.done_date />
             <div class="divider h-0"></div>
             <Header header=self.header />
             <div class="divider h-0"></div>
-            <pre class="p-4 rounded-md w-full overflow-x-auto">
-                <code>{body}</code>
-            </pre>
+            <Body content_type=content_type body=self.body />
         }
         .into_view()
+    }
+}
+
+#[component]
+fn Body(body: Vec<u8>, content_type: Option<Mime>) -> impl IntoView {
+    let body = if let Some(content_type) = content_type {
+        let base = content_type.basetype();
+        let sub = content_type.subtype();
+        if "text" == base
+            || matches!(sub, "json" | "x-www-form-urlencoded" | "markdown" | "rtf")
+            || sub.contains("xml")
+        {
+            let body = if "json" == sub {
+                serde_json::from_slice::<Value>(&body)
+                    .and_then(|body| serde_json::to_vec_pretty(&body))
+                    .unwrap_or(body)
+            } else {
+                body
+            };
+
+            let charset = content_type
+                .param("charset")
+                .map(|c| c.as_str().to_lowercase())
+                .unwrap_or("utf-8".to_string());
+
+            decode(body, &charset)
+        } else {
+            Err(Error::NoText)
+        }
+    } else {
+        decode(body, "utf-8")
+    };
+
+    // TODO raw body
+    view! {
+        <pre class="p-4 rounded-md w-full overflow-x-auto">
+            <code>{body}</code>
+        </pre>
     }
 }
 
@@ -167,4 +216,27 @@ fn Stat(status: StatusCode, elapsed_time: i32, done_date: OffsetDateTime) -> imp
             </div>
         </div>
     }
+}
+
+fn decode(text: Vec<u8>, charset: &str) -> Result<String, Error> {
+    const TRAP: DecoderTrap = DecoderTrap::Strict;
+    let result = match charset {
+        "ascii" => ASCII.decode(&text, TRAP),
+        "gb18030" => GB18030.decode(&text, TRAP),
+        "gbk" => GBK.decode(&text, TRAP),
+        "iso-8859-1" => ISO_8859_1.decode(&text, TRAP),
+        _ => UTF_8.decode(&text, TRAP),
+    };
+
+    result
+        .inspect_err(|e| error!("{e}"))
+        .or(String::from_utf8(text).map_err(|e| Error::Decoding { src: e.to_string() }))
+}
+
+#[derive(Debug, Clone, Snafu)]
+enum Error {
+    #[snafu(display("Failed to decoding: {src}"), context(suffix(false)))]
+    Decoding { src: String },
+    #[snafu(display("No text body"), context(suffix(false)))]
+    NoText,
 }

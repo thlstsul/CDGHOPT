@@ -1,29 +1,22 @@
 {
-    "name": "CDGHOPT",
-    "version": "0.5.2",
-    "manifest_version": 3,
-    "description": "http client",
-    "action": {
-        "default_icon": {
-            "19": "logo.png",
-            "38": "logo.png"
-        }
-    },
-    "permissions": [
-        "tabs",
-        "webRequest",
-        "storage",
-        "unlimitedStorage"
-    ],
-    "host_permissions": [
-        "*://*/*"
-    ],
-    "background": {
-        "type": "module",
-        "service_worker": "background/index.js"
-    },
-    "content_security_policy": {
-        "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'",
-        "sandbox": "sandbox allow-scripts"
+  "name": "CDGHOPT",
+  "version": "0.6.0",
+  "manifest_version": 3,
+  "description": "http client",
+  "action": {
+    "default_icon": {
+      "19": "logo.png",
+      "38": "logo.png"
     }
+  },
+  "permissions": ["tabs", "webRequest", "storage", "unlimitedStorage"],
+  "host_permissions": ["*://*/*"],
+  "background": {
+    "type": "module",
+    "service_worker": "background/index.js"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'",
+    "sandbox": "sandbox allow-scripts"
+  }
 }
