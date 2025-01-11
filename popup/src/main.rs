@@ -1,5 +1,5 @@
 use app::App;
-use leptos::*;
+use leptos::prelude::*;
 use time::macros::format_description;
 use time::UtcOffset;
 use tracing::Level;

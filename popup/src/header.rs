@@ -1,42 +1,40 @@
-use leptos::*;
-use thaw::{AutoComplete, AutoCompleteOption, Theme, ThemeProvider};
+use leptos::prelude::*;
+use thaw::{AutoComplete, AutoCompleteOption};
+use thaw_utils::BoxOneCallback;
 
 #[component]
 fn HeaderName(
     value: RwSignal<String>,
     placeholder: &'static str,
-    #[prop(into)] on_select: Callback<String>,
+    #[prop(into)] on_select: BoxOneCallback<String>,
 ) -> impl IntoView {
-    let options = create_memo(move |_| {
+    let options = Memo::new(move |_| {
         let input = value.get();
 
         let input = input.to_lowercase();
         let mut ops: Vec<_> = HEADERS
             .iter()
-            .filter(|&h| h.to_lowercase().starts_with(&input))
-            .map(|header| AutoCompleteOption {
-                label: header.to_string(),
-                value: header.to_string(),
-            })
+            .filter(|h| h.to_lowercase().starts_with(&input))
+            .map(|h| h.to_string())
             .collect();
 
-        if !input.is_empty() {
-            let current = AutoCompleteOption {
-                label: input.clone(),
-                value: input.clone(),
-            };
-            if !ops.contains(&current) {
-                ops.insert(0, current);
-            }
+        if !input.is_empty() && !ops.contains(&input) {
+            ops.insert(0, input);
         }
 
         ops
     });
 
     view! {
-        <ThemeProvider theme=Theme::dark()>
-            <AutoComplete value=value options=options placeholder=placeholder on_select=on_select />
-        </ThemeProvider>
+        <AutoComplete value=value placeholder=placeholder on_select=on_select>
+            <For
+                each=move || options.get()
+                key=|option| option.clone()
+                children=move |option| {
+                    view! { <AutoCompleteOption value=option.clone()>{option}</AutoCompleteOption> }
+                }
+            />
+        </AutoComplete>
     }
 }
 
@@ -50,13 +48,13 @@ pub fn HeaderTable(rows: RwSignal<Vec<(String, String)>>, class: &'static str) -
                     each=move || rows.get().into_iter().enumerate()
                     key=|(index, state)| format!("{}-{}", index, state.0)
                     children=move |(index, _)| {
-                        let row = create_memo(move |_| rows.get().get(index).unwrap().clone());
+                        let row = Memo::new(move |_| rows.get().get(index).unwrap().clone());
                         let is_last = index == rows.get().len() - 1;
                         view! {
                             <tr>
                                 <td>
                                     <HeaderName
-                                        value=create_rw_signal(row.get().0.clone())
+                                        value=RwSignal::new(row.get().0.clone())
                                         on_select=move |new_value: String| {
                                             rows.update(|rows| {
                                                 let row = rows.get_mut(index).unwrap();
@@ -84,7 +82,7 @@ pub fn HeaderTable(rows: RwSignal<Vec<(String, String)>>, class: &'static str) -
                                     />
                                 </td>
                                 <th class="h-6 w-6">
-                                    <Show when=move || !is_last fallback=|| view! {}>
+                                    <Show when=move || !is_last>
                                         <svg
                                             xmlns="http://www.w3.org/2000/svg"
                                             viewBox="0 0 24 24"

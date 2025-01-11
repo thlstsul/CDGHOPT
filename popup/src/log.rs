@@ -1,5 +1,5 @@
 use leptos::ev::Event;
-use leptos::*;
+use leptos::prelude::*;
 use module::http::{Request, Response};
 use serde::ser::Serializer as _;
 use serde::{Deserialize, Serialize};
@@ -35,28 +35,31 @@ pub struct LogContent {
 #[component]
 pub fn LogDrawer(
     indexes: RwSignal<Vec<LogIndexItem>>,
-    #[prop(into)] on_select: Callback<LogContent>,
+    log_content: RwSignal<Option<LogContent>>,
 ) -> impl IntoView {
-    let load_index = create_action(|indexes: &RwSignal<Vec<LogIndexItem>>| load_index(*indexes));
+    let load_index =
+        Action::new_local(|indexes: &RwSignal<Vec<LogIndexItem>>| load_index(*indexes));
     load_index.dispatch(indexes);
 
-    let get_log = create_action(move |id: &Uuid| {
-        let id = *id;
-        async move {
-            let content = get_log(id).await;
-            if let Ok(content) = content {
-                on_select.call(content);
-            }
-        }
-    });
-
-    let star = create_action(|index_param: &(RwSignal<Vec<LogIndexItem>>, Uuid)| {
+    let star = Action::new_local(|index_param: &(RwSignal<Vec<LogIndexItem>>, Uuid)| {
         let indexes = index_param.0;
         let id = index_param.1;
         async move {
             let _ = star(indexes, id)
                 .await
                 .inspect(|e| error!("Failed to star: {e:?}"));
+        }
+    });
+
+    let get_log = Action::new_local(move |id: &Uuid| {
+        let id = *id;
+        get_log(id)
+    });
+
+    let log = get_log.value();
+    Effect::new(move |_| {
+        if let Some(Some(log)) = log.get() {
+            log_content.set(Some(log));
         }
     });
 
@@ -96,11 +99,15 @@ pub fn LogDrawer(
                                         <div class="card-actions justify-end">
                                             <StarButton
                                                 checked=index.star
-                                                on_change=move |_| { star.dispatch((indexes, index.id)) }
+                                                on_change=move |_| {
+                                                    star.dispatch((indexes, index.id));
+                                                }
                                             />
                                             <div
                                                 class="badge badge-primary"
-                                                on:click=move |_| get_log.dispatch(index.id)
+                                                on:click=move |_| {
+                                                    get_log.dispatch(index.id);
+                                                }
                                             >
                                                 Open
                                             </div>
@@ -157,7 +164,7 @@ pub fn StarButton(checked: bool, on_change: impl FnMut(Event) + 'static) -> impl
 async fn load_index(indexes: RwSignal<Vec<LogIndexItem>>) {
     let mut index_items: Vec<LogIndexItem> = get_local(INDEXES)
         .await
-        .inspect_err(|e| error!("Failed to load: {e:?}"))
+        .inspect_err(|e| error!("Failed to load index: {e:?}"))
         .unwrap_or_default();
 
     let ninety_day_before = OffsetDateTime::now_local().map(|now| now.checked_sub(90.days()));
@@ -185,8 +192,11 @@ async fn load_index(indexes: RwSignal<Vec<LogIndexItem>>) {
     }
 }
 
-async fn get_log(id: Uuid) -> Result<LogContent, JsValue> {
-    get_local(&id.to_string()).await
+async fn get_log(id: Uuid) -> Option<LogContent> {
+    get_local(&id.to_string())
+        .await
+        .inspect_err(|e| error!("{e:?}"))
+        .ok()
 }
 
 pub async fn save_log(

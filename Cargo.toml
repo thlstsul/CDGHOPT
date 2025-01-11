@@ -5,7 +5,7 @@ members = ["module", "popup", "background"]
 [workspace.dependencies]
 console_error_panic_hook = { version = "0.1.7" }
 http = { version = "1.1.0", default-features = false }
-module = { version = "0.6.0", path = "module" }
+module = { version = "0.7.0", path = "module" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde-wasm-bindgen = "0.6"

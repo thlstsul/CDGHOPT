@@ -1,8 +1,8 @@
-use leptos::*;
+use leptos::{html::Div, prelude::*};
 
 #[component]
 pub fn BodyArea(
-    node_ref: NodeRef<html::Div>,
+    node_ref: NodeRef<Div>,
     class: &'static str,
     #[prop(into)] value: Signal<String>,
     #[prop(into)] contenteditable: Signal<bool>,

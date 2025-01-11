@@ -6,69 +6,48 @@ use encoding::{
 };
 use http::{header::CONTENT_TYPE, HeaderValue, StatusCode};
 use http_types::Mime;
-use leptos::*;
+use leptos::prelude::*;
+use module::http::Response;
 use serde_json::Value;
 use snafu::Snafu;
 use time::{macros::format_description, OffsetDateTime};
 use tracing::error;
 
-#[derive(Debug, Clone)]
-pub struct Response {
-    pub done_date: OffsetDateTime,
-    pub status: StatusCode,
-    pub header: HashMap<String, String>,
-    pub body: Vec<u8>,
-    pub elapsed_time: i32,
-}
+#[component]
+pub fn ResponseView(resp: Response) -> impl IntoView {
+    let Response {
+        done_date,
+        status,
+        header,
+        body,
+        elapsed_time,
+    } = resp;
 
-impl From<module::http::Response> for Response {
-    fn from(val: module::http::Response) -> Self {
-        let module::http::Response {
-            done_date,
-            status,
-            header,
-            body,
-            elapsed_time,
-        } = val;
-
-        let mut head_map = HashMap::new();
-        for (name, value) in header.into_iter() {
-            let value_str = HeaderValue::from_bytes(&value)
-                .unwrap()
-                .to_str()
-                .unwrap_or("no visible")
-                .to_string();
-            // TODO base 64
-            head_map.insert(name, value_str);
-        }
-
-        Response {
-            done_date,
-            status: StatusCode::from_u16(status).unwrap_or_default(),
-            header: head_map,
-            body,
-            elapsed_time,
-        }
+    let mut header_map = HashMap::new();
+    for (name, value) in header.into_iter() {
+        let value_str = HeaderValue::from_bytes(&value)
+            .unwrap()
+            .to_str()
+            .unwrap_or("no visible")
+            .to_string();
+        // TODO base 64
+        header_map.insert(name, value_str);
     }
-}
 
-impl IntoView for Response {
-    fn into_view(self) -> View {
-        let content_type = self
-            .header
-            .get(CONTENT_TYPE.as_str())
-            .map(|c| Mime::from_str(c))
-            .transpose()
-            .unwrap_or(None);
+    let status = StatusCode::from_u16(status).unwrap_or_default();
 
-        view! {
-            <Stat status=self.status elapsed_time=self.elapsed_time done_date=self.done_date />
-            <div class="divider h-0"></div>
-            <Header header=self.header />
-            <div class="divider h-0"></div>
-            <Body content_type=content_type body=self.body />
-        }
-        .into_view()
+    let content_type = header_map
+        .get(CONTENT_TYPE.as_str())
+        .map(|c| Mime::from_str(c))
+        .transpose()
+        .unwrap_or(None);
+
+    view! {
+        <Stat status=status elapsed_time=elapsed_time done_date=done_date />
+        <div class="divider h-0"></div>
+        <Header header=header_map />
+        <div class="divider h-0"></div>
+        <Body content_type=content_type body=body />
     }
 }
 

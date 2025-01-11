@@ -1,4 +1,4 @@
-use leptos::*;
+use leptos::prelude::*;
 
 #[component]
 pub fn MethodSelect(value: RwSignal<String>, class: &'static str) -> impl IntoView {
