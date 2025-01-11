@@ -1,4 +1,5 @@
 use leptos::{html::Div, prelude::*};
+use thaw_utils::class_list;
 
 #[component]
 pub fn BodyArea(
@@ -9,7 +10,7 @@ pub fn BodyArea(
 ) -> impl IntoView {
     view! {
         <div
-            class=class
+            class=class_list!["textarea", "rounded-none", class]
             node_ref=node_ref
             contenteditable=move || contenteditable.get().to_string()
         >

@@ -98,10 +98,10 @@ pub fn App() -> impl IntoView {
                         <div class="join rounded-none w-full join-item">
                             <MethodSelect
                                 value=method_value
-                                class="select rounded-none join-item"
+                                class="join-item"
                             />
-                            <UriInput value=uri_value class="input rounded-none w-full join-item" />
-                            <SendButton on:click=on_submit class="btn btn-active join-item" />
+                            <UriInput value=uri_value class="w-full join-item" />
+                            <SendButton on:click=on_submit class="join-item" />
                         </div>
                         <div class="divider"></div>
                         <HeaderTable rows=header_value class="w-full join-item" />
@@ -110,7 +110,7 @@ pub fn App() -> impl IntoView {
                             node_ref=body_element
                             value=body_value
                             contenteditable=body_editable
-                            class="textarea rounded-none h-full w-full join-item"
+                            class="h-full w-full join-item"
                         />
                     </div>
                 </div>

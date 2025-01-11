@@ -1,9 +1,10 @@
 use leptos::prelude::*;
+use thaw_utils::class_list;
 
 #[component]
 pub fn SendButton(class: &'static str) -> impl IntoView {
     view! {
-        <button class=class>
+        <button class=class_list!["btn", "btn-active", class]>
             <svg
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 24 24"
