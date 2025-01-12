@@ -26,7 +26,7 @@ fn HeaderName(
     });
 
     view! {
-        <AutoComplete value=value placeholder=placeholder on_select=on_select>
+        <AutoComplete class="header-name w-full" value=value placeholder=placeholder on_select=on_select>
             <For
                 each=move || options.get()
                 key=|option| option.clone()
@@ -52,7 +52,7 @@ pub fn HeaderTable(rows: RwSignal<Vec<(String, String)>>, class: &'static str) -
                         let is_last = index == rows.get().len() - 1;
                         view! {
                             <tr>
-                                <td>
+                                <td class="w-1/3">
                                     <HeaderName
                                         value=RwSignal::new(row.get().0.clone())
                                         on_select=move |new_value: String| {
