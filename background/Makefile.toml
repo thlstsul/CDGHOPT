@@ -19,7 +19,5 @@ args = [
 [tasks.copy]
 script_runner = "@shell"
 script = '''
-rm -rf ../extension/background
-mkdir ../extension/background
 cp index.js ../extension/background/
 '''
