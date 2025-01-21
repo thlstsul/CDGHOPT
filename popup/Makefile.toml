@@ -5,12 +5,12 @@ pnpm install
 '''
 
 [tasks.fmt]
-install_crate = "leptosfmt"
+install_crate = { crate_name = "leptosfmt", binary = "leptosfmt", test_arg = "--help" }
 command = "cargo"
 args = ["fmt"]
 
 [tasks.build]
-install_crate = "trunk"
+install_crate = { crate_name = "trunk", binary = "trunk", test_arg = "--help" }
 command = "trunk"
 args = ["build", "--release", "--dist", "../extension/popup"]
 dependencies = ["install"]
